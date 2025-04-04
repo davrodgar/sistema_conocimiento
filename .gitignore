@@ -99,3 +99,5 @@ cython_debug/
 .pdm-build/
 __pypackages__/
 .pypirc
+/src/tools/*.jar
+/data/
