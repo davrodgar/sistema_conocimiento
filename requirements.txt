@@ -2,3 +2,9 @@ watchdog
 requests
 pdfminer.six
 python-docx
+spacy
+pdfplumber
+faiss-cpu
+numpy
+sentence-transformers
+transformers
