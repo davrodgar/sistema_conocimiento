@@ -46,10 +46,18 @@ def extract_text_from_docx(file_path):
 
 # Función para extraer texto de cualquier archivo con Apache Tika
 def extract_text_from_tika(file_path):
-    headers = {"Content-Type": "application/octet-stream"}
+    headers = {
+        "Content-Type": "application/octet-stream"
+    }
     with open(file_path, "rb") as f:
-        response = requests.put(TIKA_SERVER + "/tika", data=f, headers=headers)
-        return response.text if response.status_code == 200 else ""
+        response = requests.put(TIKA_SERVER + "/tika", data=f, headers=headers, params={"prettyPrint": "true"})
+        if response.status_code == 200:
+            # Normalizar saltos de línea para mejorar la segmentación
+            text = response.text.replace("\r\n", "\n").replace("\r", "\n")
+            return text
+        else:
+            print(f"❌ Error al extraer texto con Tika: {response.status_code}")
+            return ""
 
 # Procesamiento de documentos
 def process_document(file_path):
