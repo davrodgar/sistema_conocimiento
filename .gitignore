@@ -26,6 +26,13 @@ __pycache__/
 *.env
 
 # ====================
+# Archivos del sistema operativo
+# ====================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ====================
 # Logs y bases de datos
 # ====================
 *.log
@@ -93,6 +100,15 @@ cython_debug/
 .ruff_cache/
 
 # ====================
+# Estructura de carpetas
+# ====================
+/data/*
+!/data/input/.gitkeep
+!/data/knowledge/.gitkeep
+!/data/processed/.gitkeep
+!/data/segmented/.gitkeep
+
+# ====================
 # Otros
 .pdm.toml
 .pdm-python
@@ -100,4 +116,5 @@ cython_debug/
 __pypackages__/
 .pypirc
 /src/tools/*.jar
-/data/
+/src/Historial Versiones TFM/
+
