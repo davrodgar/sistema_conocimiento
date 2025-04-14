@@ -77,10 +77,16 @@ def process_document(file_path):
                     response = requests.put(TIKA_SERVER + "/tika", data=f, headers=headers, params={"prettyPrint": "true"})
 
                 if response.status_code == 200:
+                    # Guardar la respuesta completa de Tika en un archivo
+                    output_raw_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKAresponse.raw")
+                    with open(output_raw_file, "w", encoding="utf-8") as f:
+                        f.write(response.text)  # Guardar la respuesta completa de Tika
+                    print(f"✅ Respuesta completa de Tika guardada como: {output_raw_file}")
+
                     # Incluir la extensión en el nombre del archivo JSON
                     output_json_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKAextraction.json")
                     with open(output_json_file, "w", encoding="utf-8") as f:
-                        f.write(response.text)  # Guardar la respuesta completa de Tika
+                        f.write(response.text)  # Guardar la respuesta completa de Tika en JSON
 
                     # Mover el archivo original a la carpeta de procesados
                     shutil.move(file_path, os.path.join(PROCESSED_DIR, file_name))
