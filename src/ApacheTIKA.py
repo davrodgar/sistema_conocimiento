@@ -6,8 +6,6 @@ import subprocess
 import json
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from pdfminer.high_level import extract_text
-from docx import Document
 
 # Directorios
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -15,8 +13,8 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 INPUT_DIR = os.path.join(BASE_DIR, "data", "input")
 PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 METADATA_DIR = os.path.join(BASE_DIR, "data", "knowledge")
-# Ruta al archivo JAR de Tika Server
 
+# Ruta al archivo JAR de Tika Server
 TIKA_JAR_PATH = os.path.join(BASE_DIR, "src/tools", "tika-server-standard-3.1.0.jar")
 # URL del servidor Tika
 TIKA_SERVER = "http://localhost:9998/tika"
@@ -36,22 +34,13 @@ def start_tika_server():
         print(f"❌ Error al iniciar Apache Tika Server: {e}")
         return None
 
-# Función para extraer texto de PDFs
-def extract_text_from_pdf(file_path):
-    return extract_text(file_path)
-
-# Función para extraer texto de DOCX
-def extract_text_from_docx(file_path):
-    doc = Document(file_path)
-    return "\n".join([p.text for p in doc.paragraphs])
-
 # Función para extraer texto de cualquier archivo con Apache Tika
 def extract_text_from_tika(file_path):
     headers = {
         "Content-Type": "application/octet-stream"
     }
     with open(file_path, "rb") as f:
-        response = requests.put(TIKA_SERVER + "/tika", data=f, headers=headers, params={"prettyPrint": "true"})
+        response = requests.put(TIKA_SERVER, data=f, headers=headers, params={"prettyPrint": "true"})
         if response.status_code == 200:
             # Normalizar saltos de línea para mejorar la segmentación
             text = response.text.replace("\r\n", "\n").replace("\r", "\n")
@@ -65,34 +54,32 @@ def process_document(file_path):
     file_name = os.path.basename(file_path)
     base_name, file_extension = os.path.splitext(file_name)  # Separar el nombre base y la extensión
     print(f"📂 Procesando archivo: {file_name}")  # Traza para confirmar el archivo procesado
+
     try:
         # Intentar varias veces si el archivo está bloqueado
         for _ in range(5):  # Intentar hasta 5 veces
             try:
                 # Extraer texto usando Apache Tika
-                headers = {
-                    "Content-Type": "application/octet-stream"
-                }
-                with open(file_path, "rb") as f:
-                    response = requests.put(TIKA_SERVER + "/tika", data=f, headers=headers, params={"prettyPrint": "true"})
+                text = extract_text_from_tika(file_path)
 
-                if response.status_code == 200:
-                    # Guardar la respuesta completa de Tika en un archivo
-                    output_raw_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKAresponse.raw")
-                    with open(output_raw_file, "w", encoding="utf-8") as f:
-                        f.write(response.text)  # Guardar la respuesta completa de Tika
-                    print(f"✅ Respuesta completa de Tika guardada como: {output_raw_file}")
+                if text:
+                    # Guardar el texto extraído en un archivo
+                    output_text_file = os.path.join(PROCESSED_DIR, f"{base_name}_extracted.txt")
+                    with open(output_text_file, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    print(f"✅ Texto extraído guardado como: {output_text_file}")
 
-                    # Incluir la extensión en el nombre del archivo JSON
-                    output_json_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKAextraction.json")
+                    # Guardar el texto extraído en un archivo JSON
+                    output_json_file = os.path.join(PROCESSED_DIR, f"{base_name}_extracted.json")
                     with open(output_json_file, "w", encoding="utf-8") as f:
-                        f.write(response.text)  # Guardar la respuesta completa de Tika en JSON
+                        json.dump({"content": text}, f, ensure_ascii=False, indent=4)
+                    print(f"✅ Texto extraído guardado como JSON: {output_json_file}")
 
                     # Mover el archivo original a la carpeta de procesados
                     shutil.move(file_path, os.path.join(PROCESSED_DIR, file_name))
-                    print(f"✅ Documento procesado y guardado como: {output_json_file}")
+                    print(f"✅ Documento procesado y movido a: {PROCESSED_DIR}")
                 else:
-                    print(f"⚠️ Error al extraer texto con Tika: {response.status_code}")
+                    print(f"⚠️ No se pudo extraer texto del archivo: {file_name}")
                 break  # Salir del bucle si se procesa correctamente
             except PermissionError:
                 print(f"⚠️ Archivo en uso, reintentando: {file_name}")
@@ -111,7 +98,6 @@ class WatcherHandler(FileSystemEventHandler):
 if __name__ == "__main__":
     tika_process = start_tika_server()  # Guardar el proceso de Tika
 
-    
     print(f"📂 El script se está ejecutando en: {os.getcwd()}")
     os.makedirs(INPUT_DIR, exist_ok=True)
     os.makedirs(PROCESSED_DIR, exist_ok=True)
