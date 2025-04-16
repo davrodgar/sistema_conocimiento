@@ -39,6 +39,8 @@ ehthumbs.db
 *.sqlite3
 db.sqlite3
 db.sqlite3-journal
+sistema_conocimiento.db
+sistema_conocimiento.db-journal
 
 # ====================
 # Coverage y testing
@@ -76,6 +78,7 @@ dist/
 *.egg
 MANIFEST
 site/
+documentation/*.xlsx
 
 # ====================
 # Jupyter/IPython
