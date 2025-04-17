@@ -4,6 +4,8 @@ import shutil
 import requests
 import subprocess
 import json
+import sqlite3
+from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -25,6 +27,15 @@ TIKA_SERVER = "http://localhost:9998/tika"
 
 ACCEPT_FORMAT = "text/plain"  # Cambia este valor según el formato deseado ("application/json" o "text/plain")
 
+# Ruta a la base de datos SQLite
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/sistema_conocimiento.db"))
+
+def connect_to_db():
+    if not os.path.exists(DB_PATH):
+        print(f"❌ No se encontró la base de datos en: {DB_PATH}")
+        return None
+    return sqlite3.connect(DB_PATH)
+
 # Comando para iniciar el servidor Tika
 def start_tika_server():
     if not os.path.exists(TIKA_JAR_PATH):
@@ -44,13 +55,31 @@ def start_tika_server():
 def process_document(file_path, accept_format):
     """
     Procesa un documento usando Apache Tika y guarda la salida en el formato especificado.
-    
-    :param file_path: Ruta del archivo a procesar.
-    :param accept_format: Formato de salida solicitado a Tika ("application/json" o "text/plain").
+    Antes de procesar, verifica si ya existe en la base de datos y solicita confirmación al usuario.
     """
     file_name = os.path.basename(file_path)
     base_name, file_extension = os.path.splitext(file_name)  # Separar el nombre base y la extensión
-    print(f"📂 Procesando archivo: {file_name} con Accept: {accept_format}")  # Traza para confirmar el archivo procesado
+    metodo_extraccion = f"TIKA_{accept_format.replace('/', '_')}"  # Formato del método de extracción
+
+    # Comprobar si el archivo ya existe en la base de datos
+    existing_id = check_existing_fichero(DB_PATH, file_name, file_extension, metodo_extraccion)
+    if existing_id:
+        print(f"⚠️ El archivo '{file_name}' ya existe en la base de datos con el mismo tipo y método de extracción.")
+        user_input = input("¿Desea procesarlo nuevamente? (s/n): ").strip().lower()
+        if user_input != 's':
+            print(f"⏩ Procesamiento cancelado por el usuario para el archivo: {file_name}")
+            return
+        else:
+            # Eliminar el registro anterior
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM Ficheros WHERE Id = ?", (existing_id,))
+            conn.commit()
+            conn.close()
+            print(f"🗑️ Registro anterior eliminado para el archivo: {file_name}")
+
+    # Procesar el archivo con Apache Tika
+    start_time = time.time()
 
     try:
         # Intentar varias veces si el archivo está bloqueado
@@ -79,22 +108,39 @@ def process_document(file_path, accept_format):
                         tika_response = json.loads(response.text)
                         content_html = tika_response.get("X-TIKA:content", "")
                         if content_html.strip():
-                            output_html_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKA_{sanitized_accept_format}_Content.html")
+                            output_html_file = os.path.join(PROCESSED_DIR, f"{base_name}_TIKA_Content.html")
                             with open(output_html_file, "w", encoding="utf-8") as f:
                                 f.write(content_html)
                             print(f"✅ Contenido HTML extraído guardado como: {output_html_file}")
+                            fichero_generado = output_html_file
+                            tipo_extraccion = ".html"
                         else:
                             print(f"⚠️ No se encontró contenido en 'X-TIKA:content' para el archivo: {file_name}")
+                            return
                     elif accept_format == "text/plain":
                         # Guardar el contenido como archivo de texto
-                        output_txt_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKA_{sanitized_accept_format}_Content.txt")
+                        output_txt_file = os.path.join(PROCESSED_DIR, f"{base_name}_TIKA_Content.txt")
                         with open(output_txt_file, "w", encoding="utf-8") as f:
                             f.write(response.text)
                         print(f"✅ Contenido de texto extraído guardado como: {output_txt_file}")
+                        fichero_generado = output_txt_file
+                        tipo_extraccion = ".txt"
 
                     # Mover el archivo original a la carpeta de procesados/original
                     shutil.move(file_path, os.path.join(ORIGINAL_DIR, file_name))
                     print(f"✅ Documento procesado y movido a: {ORIGINAL_DIR}")
+
+                    # Añadir registro a la base de datos
+                    tiempo_extraccion = int(time.time() - start_time)
+                    add_fichero_record(
+                        DB_PATH,
+                        nombre_original=file_name,
+                        tipo_original=file_extension,
+                        metodo_extraccion=metodo_extraccion,
+                        fichero_generado=fichero_generado,
+                        tipo_extraccion=tipo_extraccion,
+                        tiempo_extraccion=tiempo_extraccion
+                    )
                 else:
                     print(f"⚠️ No se pudo extraer texto del archivo: {file_name}. Código de estado: {response.status_code}")
                 break  # Salir del bucle si se procesa correctamente
@@ -113,6 +159,73 @@ def sanitize_filename(value):
     return value.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_") \
                 .replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
 
+def add_fichero_record(DB_PATH, nombre_original, tipo_original, metodo_extraccion, fichero_generado, tipo_extraccion, tiempo_extraccion, observaciones=None):
+    """
+    Añade un registro a la tabla Ficheros de la base de datos.
+
+    :param DB_PATH: Ruta a la base de datos SQLite.
+    :param nombre_original: Nombre original del archivo.
+    :param tipo_original: Extensión del archivo original.
+    :param metodo_extraccion: Método de extracción utilizado.
+    :param fichero_generado: Ruta del fichero generado tras la extracción.
+    :param tipo_extraccion: Tipo de extracción (formato solicitado).
+    :param tiempo_extraccion: Tiempo que tomó la extracción en segundos.
+    :param observaciones: Observaciones adicionales (opcional).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Extraer solo el nombre del fichero generado (sin la ruta)
+        fichero_generado_nombre = os.path.basename(fichero_generado)
+
+        fecha_extraccion = int(datetime.now().timestamp())
+        cursor.execute("""
+            INSERT INTO Ficheros (
+                nombreOriginal, tipoOriginal, metodoExtraccion, ficheroGenerado, 
+                tipoExtraccion, tiempoExtraccion, observaciones, fechaExtraccion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            nombre_original, tipo_original, metodo_extraccion, fichero_generado_nombre,
+            tipo_extraccion, tiempo_extraccion, observaciones, fecha_extraccion
+        ))
+        conn.commit()
+        print(f"✅ Registro añadido a la base de datos para el archivo: {nombre_original}")
+    except Exception as e:
+        print(f"❌ Error al añadir el registro a la base de datos: {e}")
+    finally:
+        conn.close()
+
+def check_existing_fichero(DB_PATH, nombre_original, tipo_original, metodo_extraccion):
+    """
+    Comprueba si ya existe un fichero con el mismo nombre, tipo original y método de extracción.
+
+    :param DB_PATH: Ruta a la base de datos SQLite.
+    :param nombre_original: Nombre original del archivo.
+    :param tipo_original: Extensión del archivo original.
+    :param metodo_extraccion: Método de extracción utilizado.
+    :return: El ID del registro existente si se encuentra, de lo contrario None.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        query = """
+           SELECT Id FROM Ficheros
+           WHERE nombreOriginal = ? AND tipoOriginal = ? AND metodoExtraccion = ?
+        """
+        params = (nombre_original, tipo_original, metodo_extraccion)
+        
+        print(f"🔍 Ejecutando consulta SQL: {query.strip()} con los parametros: {params}")  # Traza de la consulta
+        cursor.execute(query, params)
+        result = cursor.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"❌ Error al comprobar el registro en la base de datos: {e}")
+        return None
+    finally:
+        conn.close()
+
 # Monitor de la carpeta de entrada
 class WatcherHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -120,6 +233,7 @@ class WatcherHandler(FileSystemEventHandler):
             process_document(event.src_path, ACCEPT_FORMAT)
 
 if __name__ == "__main__":
+    print(f"📂 Ruta a la base de datos SQLite: {DB_PATH}")  # Traza de la ruta a la base de datos
     tika_process = start_tika_server()  # Guardar el proceso de Tika
 
     print(f"📂 El script se está ejecutando en: {os.getcwd()}")
@@ -130,6 +244,12 @@ if __name__ == "__main__":
     print(f"📂 Ruta de entrada (INPUT_DIR): {os.path.abspath(INPUT_DIR)}")
     print(f"📂 Ruta de procesados (PROCESSED_DIR): {os.path.abspath(PROCESSED_DIR)}")
     print(f"📂 Ruta de metadatos (METADATA_DIR): {os.path.abspath(METADATA_DIR)}")
+
+    # Ejemplo de uso de la conexión a la base de datos
+    conn = connect_to_db()
+    if conn:
+        print("✅ Conexión exitosa a la base de datos.")
+        conn.close()
 
     # Listar archivos en la carpeta de entrada
     print("📋 Archivos encontrados en la carpeta de entrada:")
@@ -156,3 +276,5 @@ if __name__ == "__main__":
             tika_process.terminate()  # Detener el proceso de Tika
         observer.stop()
     observer.join()
+
+
