@@ -97,7 +97,7 @@ def process_document(file_path, accept_format):
                 if response.status_code == 200:
                     # Guardar la respuesta completa de Tika en un archivo RAW
                     sanitized_accept_format = sanitize_filename(accept_format)  # Limpia el formato
-                    output_raw_file = os.path.join(PROCESSED_DIR, f"{base_name}{file_extension}_TIKA_{sanitized_accept_format}_Response.raw")
+                    output_raw_file = os.path.join(PROCESSED_DIR, f"{base_name}_{metodo_extraccion}_Response.raw")
                     with open(output_raw_file, "w", encoding="utf-8") as f:
                         f.write(response.text)
                     print(f"✅ Respuesta completa de Tika guardada como: {output_raw_file}")
@@ -108,7 +108,7 @@ def process_document(file_path, accept_format):
                         tika_response = json.loads(response.text)
                         content_html = tika_response.get("X-TIKA:content", "")
                         if content_html.strip():
-                            output_html_file = os.path.join(PROCESSED_DIR, f"{base_name}_TIKA_Content.html")
+                            output_html_file = os.path.join(PROCESSED_DIR, f"{base_name}_{metodo_extraccion}_Content.html")
                             with open(output_html_file, "w", encoding="utf-8") as f:
                                 f.write(content_html)
                             print(f"✅ Contenido HTML extraído guardado como: {output_html_file}")
@@ -119,7 +119,7 @@ def process_document(file_path, accept_format):
                             return
                     elif accept_format == "text/plain":
                         # Guardar el contenido como archivo de texto
-                        output_txt_file = os.path.join(PROCESSED_DIR, f"{base_name}_TIKA_Content.txt")
+                        output_txt_file = os.path.join(PROCESSED_DIR, f"{base_name}_{metodo_extraccion}_Content.txt")
                         with open(output_txt_file, "w", encoding="utf-8") as f:
                             f.write(response.text)
                         print(f"✅ Contenido de texto extraído guardado como: {output_txt_file}")
