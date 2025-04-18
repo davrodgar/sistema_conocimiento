@@ -5,6 +5,8 @@ from docx import Document
 import win32com.client
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+import sqlite3
+from datetime import datetime
 
 # Directorios
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,10 +15,80 @@ INPUT_DIR = os.path.join(BASE_DIR, "data", "input")
 PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 METADATA_DIR = os.path.join(BASE_DIR, "data", "knowledge")
 
+# Ruta a la base de datos SQLite
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/sistema_conocimiento.db"))
+
 # Crear directorios si no existen
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(METADATA_DIR, exist_ok=True)
+
+def connect_to_db():
+    if not os.path.exists(DB_PATH):
+        print(f"❌ No se encontró la base de datos en: {DB_PATH}")
+        return None
+    return sqlite3.connect(DB_PATH)
+
+def check_existing_fichero(DB_PATH, nombre_original, tipo_original, metodo_extraccion):
+    """
+    Comprueba si ya existe un fichero con el mismo nombre, tipo original y método de extracción.
+
+    :param DB_PATH: Ruta a la base de datos SQLite.
+    :param nombre_original: Nombre original del archivo.
+    :param tipo_original: Extensión del archivo original.
+    :param metodo_extraccion: Método de extracción utilizado.
+    :return: El ID del registro existente si se encuentra, de lo contrario None.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        query = """
+           SELECT Id FROM Ficheros
+           WHERE nombreOriginal = ? AND tipoOriginal = ? AND metodoExtraccion = ?
+        """
+        params = (nombre_original, tipo_original, metodo_extraccion)
+        cursor.execute(query, params)
+        result = cursor.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"❌ Error al comprobar el registro en la base de datos: {e}")
+        return None
+    finally:
+        conn.close()
+
+def add_fichero_record(DB_PATH, nombre_original, tipo_original, metodo_extraccion, fichero_generado, tipo_extraccion, tiempo_extraccion, observaciones=None):
+    """
+    Añade un registro a la tabla Ficheros de la base de datos.
+
+    :param DB_PATH: Ruta a la base de datos SQLite.
+    :param nombre_original: Nombre original del archivo.
+    :param tipo_original: Extensión del archivo original.
+    :param metodo_extraccion: Método de extracción utilizado.
+    :param fichero_generado: Ruta del fichero generado tras la extracción.
+    :param tipo_extraccion: Tipo de extracción (formato solicitado).
+    :param tiempo_extraccion: Tiempo que tomó la extracción en segundos.
+    :param observaciones: Observaciones adicionales (opcional).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        fichero_generado_nombre = os.path.basename(fichero_generado)
+        fecha_extraccion = int(datetime.now().timestamp())
+        cursor.execute("""
+            INSERT INTO Ficheros (
+                nombreOriginal, tipoOriginal, metodoExtraccion, ficheroGenerado, 
+                tipoExtraccion, tiempoExtraccion, observaciones, fechaExtraccion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            nombre_original, tipo_original, metodo_extraccion, fichero_generado_nombre,
+            tipo_extraccion, tiempo_extraccion, observaciones, fecha_extraccion
+        ))
+        conn.commit()
+        print(f"✅ Registro añadido a la base de datos para el archivo: {nombre_original}")
+    except Exception as e:
+        print(f"❌ Error al añadir el registro a la base de datos: {e}")
+    finally:
+        conn.close()
 
 # Función para extraer texto de documentos DOCX usando python-docx
 def extract_text_from_docx(file_path):
@@ -46,11 +118,18 @@ def extract_text_from_doc(file_path):
 # Procesamiento de documentos
 def process_document(file_path):
     file_name = os.path.basename(file_path)
-    base_name, file_extension = os.path.splitext(file_name)  # Separar el nombre base y la extensión
-    print(f"📂 Procesando archivo: {file_name}")  # Traza para confirmar el archivo procesado
+    base_name, file_extension = os.path.splitext(file_name)
+    metodo_extraccion = "python-docx"
+    print(f"📂 Procesando archivo: {file_name}")
+
+    # Comprobar si el archivo ya existe en la base de datos
+    existing_id = check_existing_fichero(DB_PATH, file_name, file_extension, metodo_extraccion)
+    if existing_id:
+        print(f"⚠️ El archivo '{file_name}' ya existe en la base de datos con el mismo tipo y método de extracción.")
+        return
 
     try:
-        # Intentar varias veces si el archivo está bloqueado
+        start_time = time.time()
         for _ in range(5):  # Intentar hasta 5 veces
             try:
                 if file_extension.lower() == ".docx":
@@ -79,6 +158,18 @@ def process_document(file_path):
                     # Mover el archivo original a la carpeta de procesados
                     shutil.move(file_path, os.path.join(PROCESSED_DIR, file_name))
                     print(f"✅ Documento procesado y movido a: {PROCESSED_DIR}")
+
+                    # Añadir registro a la base de datos
+                    tiempo_extraccion = int(time.time() - start_time)
+                    add_fichero_record(
+                        DB_PATH,
+                        nombre_original=file_name,
+                        tipo_original=file_extension,
+                        metodo_extraccion=metodo_extraccion,
+                        fichero_generado=output_txt_file,
+                        tipo_extraccion=".txt",
+                        tiempo_extraccion=tiempo_extraccion
+                    )
                 else:
                     print(f"⚠️ No se pudo extraer texto del archivo: {file_name}")
                 break  # Salir del bucle si se procesa correctamente
