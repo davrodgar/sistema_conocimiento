@@ -25,7 +25,7 @@ TIKA_JAR_PATH = os.path.join(BASE_DIR, "src/tools", "tika-server-standard-3.1.0.
 # URL del servidor Tika
 TIKA_SERVER = "http://localhost:9998/tika"
 
-ACCEPT_FORMAT = "text/plain"  # Cambia este valor según el formato deseado ("application/json" o "text/plain")
+ACCEPT_FORMAT = "text/plain"  # Cambia valor según formato ("application/json" o "text/plain")
 
 # Ruta a la base de datos SQLite
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/sistema_conocimiento.db"))
@@ -47,7 +47,7 @@ def start_tika_server():
         process = subprocess.Popen(["java", "-jar", TIKA_JAR_PATH])
         print("✅ Apache Tika Server iniciado.")
         return process
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         print(f"❌ Error al iniciar Apache Tika Server: {e}")
         return None
 
@@ -59,12 +59,14 @@ def process_document(file_path, accept_format):
     """
     file_name = os.path.basename(file_path)
     base_name, file_extension = os.path.splitext(file_name)  # Separar el nombre base y la extensión
-    metodo_extraccion = f"TIKA_{accept_format.replace('/', '_')}"  # Formato del método de extracción
+    metodo_extraccion = f"TIKA_{accept_format.replace('/', '_')}"  # Formato método de extracción
+    fichero_generado = None  # Inicializar la variable
+    tipo_extraccion = None  # Inicializar la variable
 
     # Comprobar si el archivo ya existe en la base de datos
     existing_id = check_existing_fichero(DB_PATH, file_name, file_extension, metodo_extraccion)
     if existing_id:
-        print(f"⚠️ El archivo '{file_name}' ya existe en la base de datos con el mismo tipo y método de extracción.")
+        print(f"⚠️ El archivo '{file_name}' ya existe en BBDD con mismo tipo y método extracción.")
         user_input = input("¿Desea procesarlo nuevamente? (s/n): ").strip().lower()
         if user_input != 's':
             print(f"⏩ Procesamiento cancelado por el usuario para el archivo: {file_name}")
