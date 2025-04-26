@@ -1,54 +1,54 @@
-import os
-import re
+"""
+Este módulo calcula los embeddings para los párrafos segmentados en archivos JSON.
 
-# Directorios
-PROCESSED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/processed"))
+Funciones principales:
+- procesar_archivo: Calcula los embeddings para los párrafos de un archivo JSON.
+- procesar_todos_los_json: Procesa todos los archivos JSON en el directorio segmentado.
+
+Utiliza el modelo multilingüe "paraphrase-multilingual-MiniLM-L12-v2" de Sentence Transformers.
+"""
+import os
+import json
+from sentence_transformers import SentenceTransformer
+
+# Directorio con los ficheros JSON segmentados
 SEGMENTED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/segmented"))
 
-# Crear la carpeta de salida si no existe
-if not os.path.exists(SEGMENTED_DIR):
-    os.makedirs(SEGMENTED_DIR)
+# Cargar modelo multilingüe que incluye soporte para español
+modelo = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-def segmentar_en_parrafos(texto):
+def procesar_archivo(ruta_json):
     """
-    Separa el texto en párrafos usando:
-    - Dobles saltos de línea
-    - Punto seguido de salto de línea y una mayúscula (inicio de un nuevo párrafo)
+    La función procesar_archivo calcula los embeddings para los párrafos de un archivo JSON. 
+    Lee el archivo, genera embeddings para cada párrafo utilizando modelo Sentence Transformers, 
+    y guarda los resultados actualizados en el mismo archivo.
+
     """
-    # Normalizar saltos de línea
-    texto = re.sub(r'\n+', '\n', texto)  # Reemplazar múltiples saltos por uno solo
+    with open(ruta_json, "r", encoding="utf-8") as f:
+        datos = json.load(f)
 
-    # Separar por dobles saltos de línea o punto seguido de un salto de línea y mayúscula
-    parrafos = re.split(r"\n\s*\n|(?<=\.)\n(?=[A-Z])", texto)
+    print(f"[INFO] Calculando embeddings en: {os.path.basename(ruta_json)}")
 
-    # Filtrar fragmentos muy cortos
-    parrafos = [p.strip() for p in parrafos if len(p.strip()) > 30]
+    for parrafo in datos.get("parrafos", []):
+        texto = parrafo.get("texto", "")
+        if texto:
+            embedding = modelo.encode(texto).tolist()
+            parrafo["embedding"] = embedding
 
-    return parrafos
+    with open(ruta_json, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=2)
 
-def procesar_archivos_txt():
+def procesar_todos_los_json():
     """
-    Procesa todos los archivos .txt en la carpeta PROCESSED_DIR,
-    segmenta su contenido en párrafos y guarda los resultados en SEGMENTED_DIR.
+    La función procesar_todos_los_json procesa todos los archivos JSON 
+    en el directorio segmentado, calculando los embeddings 
+    para los párrafos de cada archivo y actualizando su contenido.
+
     """
-    for archivo in os.listdir(PROCESSED_DIR):
-        if archivo.endswith(".txt"):
-            ruta_archivo = os.path.join(PROCESSED_DIR, archivo)
-            print(f"📂 Procesando archivo: {archivo}")
-
-            # Leer el contenido del archivo
-            with open(ruta_archivo, "r", encoding="utf-8") as f:
-                texto = f.read()
-
-            # Segmentar el texto en párrafos
-            parrafos = segmentar_en_parrafos(texto)
-
-            # Guardar los párrafos segmentados en un nuevo archivo
-            archivo_segmentado = os.path.join(SEGMENTED_DIR, archivo)
-            with open(archivo_segmentado, "w", encoding="utf-8") as f:
-                f.write("\n\n".join(parrafos))
-
-            print(f"✅ Archivo segmentado guardado en: {archivo_segmentado}")
+    for archivo in os.listdir(SEGMENTED_DIR):
+        if archivo.endswith(".json"):
+            ruta = os.path.join(SEGMENTED_DIR, archivo)
+            procesar_archivo(ruta)
 
 if __name__ == "__main__":
-    procesar_archivos_txt()
+    procesar_todos_los_json()
