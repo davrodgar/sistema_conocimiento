@@ -80,6 +80,7 @@ MANIFEST
 site/
 documentation/*.xlsx
 
+
 # ====================
 # Jupyter/IPython
 # ====================
