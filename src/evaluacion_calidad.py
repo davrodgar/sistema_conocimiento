@@ -1,19 +1,30 @@
+"""
+Módulo para evaluar la calidad de los documentos procesados.
+
+Este módulo compara los documentos originales con los generados tras el procesamiento,
+calculando métricas como la similitud, el texto perdido, los artefactos y el orden conservado.
+También registra los resultados en un archivo de texto y utiliza una base de datos SQLite
+para obtener información sobre los documentos procesados.
+"""
 import os
 import re
 import sqlite3
 import unicodedata
-from bs4 import BeautifulSoup
 from difflib import SequenceMatcher
-import chardet
 from datetime import datetime
 import time
+from bs4 import BeautifulSoup
 import win32com.client  # Importar pywin32 para interactuar con Microsoft Word
 
 # Directorios base
 PROCESSED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/processed"))
 ORIGINAL_DIR = os.path.join(PROCESSED_DIR, "original")  # Ruta para los archivos originales
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/sistema_conocimiento.db"))
-RESULTS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/resultados_comparaciones.txt"))
+DB_PATH = os.path.abspath(
+                os.path.join(os.path.dirname(__file__),
+                            "../data/sistema_conocimiento.db"))
+RESULTS_FILE = os.path.abspath(
+                os.path.join(os.path.dirname(__file__),
+                             "../data/resultados_comparaciones.txt"))
 
 def html_to_text(html_content):
     """Convierte contenido HTML a texto plano."""
@@ -33,7 +44,10 @@ def similarity_ratio(original, extracted):
     return SequenceMatcher(None, original, extracted).ratio()
 
 def read_original_text(file_path):
-    """Recorta el texto del archivo original eliminando elementos no relevantes utilizando Microsoft Word."""
+    """ 
+        Recorta el texto del archivo original 
+        eliminando elementos no relevantes utilizando Microsoft Word.
+    """
     try:
         word = win32com.client.Dispatch("Word.Application")
         word.Visible = False
@@ -100,7 +114,8 @@ def get_files_from_db():
     conn.close()
     return files
 
-def log_result(original_file, generated_file, start_time, duration, resultado, original_word_count, extracted_word_count):
+def log_result(original_file, generated_file, start_time, duration, resultado,
+               original_word_count, extracted_word_count):
     """Escribe el resultado de la comparación en un fichero."""
     with open(RESULTS_FILE, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | Original: {original_file} | Generado: {generated_file} | "
@@ -127,11 +142,24 @@ def count_words(file_path):
     except Exception as e:
         if 'word' in locals():
             word.Quit()  # Asegurarse de cerrar Word en caso de error
-        raise RuntimeError(f"Error al contar palabras en el archivo {file_path}: {e}")
+        raise RuntimeError(f"Error al contar palabras en el archivo {file_path}: {e}") from e
 
 def main():
+    """
+    Función principal para evaluar la calidad de los documentos procesados.
+
+    Esta función:
+    - Obtiene los archivos originales y generados desde la base de datos.
+    - Agrupa los archivos generados por su archivo original correspondiente.
+    - Evalúa cada archivo generado comparándolo con su archivo original.
+    - Calcula métricas como similitud, texto perdido, artefactos y orden conservado.
+    - Registra los resultados en un archivo de texto y los muestra en la consola.
+
+    :return: None
+    """
+
     resultados = []
-    extracciones_por_original = {}
+    # extracciones_por_original = {}
 
     # Obtener los ficheros desde la base de datos
     files = get_files_from_db()
@@ -164,7 +192,7 @@ def main():
         original_word_count = count_words(original_path)
         print(f"Palabras en fichero original: {original_word_count}")
 
-        for extraccion in list(extracciones):  
+        for extraccion in list(extracciones):
             extracted_path = os.path.join(PROCESSED_DIR, extraccion["fichero_generado"])
             if not os.path.exists(extracted_path):
                 print(f"Archivo extraído no encontrado: {extracted_path}")
@@ -188,8 +216,11 @@ def main():
             resultados.append(resultado)
 
             # Registrar el resultado en el fichero
-            extracted_word_count = original_word_count - int(resultado["texto_perdido"] * original_word_count / 100) + resultado["artefactos"]
-            log_result(original_file, extraccion["fichero_generado"], start_time, duration, resultado, original_word_count, extracted_word_count)
+            extracted_word_count = (original_word_count
+                                    - int(resultado["texto_perdido"] * original_word_count / 100)
+                                    + resultado["artefactos"])
+            log_result(original_file, extraccion["fichero_generado"],
+                       start_time, duration, resultado, original_word_count, extracted_word_count)
 
     # Mostrar resultados de evaluación (opcional, si no se evalúan, no hay resultados)
     for r in resultados:
