@@ -5,7 +5,7 @@ Funciones principales:
 - procesar_archivo: Calcula los embeddings para los párrafos de un archivo JSON.
 - procesar_todos_los_json: Procesa todos los archivos JSON en el directorio segmentado.
 
-Utiliza el modelo multilingüe "paraphrase-multilingual-MiniLM-L12-v2" de Sentence Transformers.
+Utiliza modelos configurables de Sentence Transformers.
 """
 import os
 import json
@@ -14,8 +14,11 @@ from sentence_transformers import SentenceTransformer
 # Directorio con los ficheros JSON segmentados
 SEGMENTED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/segmented"))
 
+# Configuración del modelo (puedes cambiar el nombre del modelo aquí)
+NOMBRE_MODELO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
 # Cargar modelo multilingüe que incluye soporte para español
-modelo = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+modelo = SentenceTransformer(NOMBRE_MODELO)
 
 def procesar_archivo(ruta_json):
     """
@@ -34,6 +37,7 @@ def procesar_archivo(ruta_json):
         if texto:
             embedding = modelo.encode(texto).tolist()
             parrafo["embedding"] = embedding
+            parrafo["modelo_embedding"] = NOMBRE_MODELO
 
     with open(ruta_json, "w", encoding="utf-8") as f:
         json.dump(datos, f, ensure_ascii=False, indent=2)
@@ -51,4 +55,5 @@ def procesar_todos_los_json():
             procesar_archivo(ruta)
 
 if __name__ == "__main__":
+    print(f"[INFO] Usando el modelo: {NOMBRE_MODELO}")
     procesar_todos_los_json()
