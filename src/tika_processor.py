@@ -30,10 +30,6 @@ TIKA_SERVER = "http://localhost:9998/tika"
 
 ACCEPT_FORMAT = "text/plain"  # Cambia valor según formato ("application/json" o "text/plain")
 
-# Ruta a la base de datos SQLite
-DB_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../data/sistema_conocimiento.db")
-)
 
 # Comando para iniciar el servidor Tika
 def start_tika_server():
@@ -76,6 +72,7 @@ def process_document(file_path, accept_format):
             print(f"⏩ Procesamiento cancelado por el usuario para el archivo: {file_name}")
             return
         else:
+            print(f"🔄 Procesando nuevamente el archivo: {file_name}")
             # Eliminar el registro anterior
             db_conn = connect_to_db()
             if db_conn:
@@ -83,7 +80,7 @@ def process_document(file_path, accept_format):
                 cursor.execute("DELETE FROM Ficheros WHERE Id = ?", (existing_id,))
                 db_conn.commit()
                 db_conn.close()
-                print(f"🗑️ Registro anterior eliminado para el archivo: {file_name}")
+                print(f"🗑️ Registro anterior eliminado de la BBDD para el archivo: {file_name}")
 
     # Procesar el archivo con Apache Tika
     start_time = time.time()
@@ -196,7 +193,7 @@ class WatcherHandler(FileSystemEventHandler):
             process_document(event.src_path, ACCEPT_FORMAT)
 
 if __name__ == "__main__":
-    print(f"📂 Ruta a la base de datos SQLite: {DB_PATH}")  # Traza de la ruta a la base de datos
+    # print(f"📂 Ruta a la base de datos SQLite: {DB_PATH}")  # Traza de la ruta a la base de datos
     tika_process = start_tika_server()  # Guardar el proceso de Tika
 
     print(f"📂 El script se está ejecutando en: {os.getcwd()}")
