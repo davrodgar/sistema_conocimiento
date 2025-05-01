@@ -19,6 +19,7 @@ from datetime import datetime
 import pandas as pd
 from bs4 import BeautifulSoup
 from langdetect import detect, DetectorFactory, LangDetectException
+from db_utils import obtener_metodo_tipo_extraccion
 
 # Configuración inicial
 DetectorFactory.seed = 0
@@ -183,10 +184,6 @@ def procesar_archivos():
     """
     Procesa los archivos en el directorio de entrada y realiza la segmentación en párrafos.
 
-    La función aplica dos estrategias de segmentación:
-    - Por títulos detectados en el texto.
-    - Por saltos de línea.
-
     Genera archivos JSON con los párrafos segmentados y un resumen en formato CSV con estadísticas
     del procesamiento.
 
@@ -207,10 +204,22 @@ def procesar_archivos():
         if archivo.endswith('.html'):
             contenido = limpiar_html(contenido)
 
-        # contenido = limpiar_texto_presegmentacion(contenido)
+        # Obtener el método, tipo de extracción y ID desde la base de datos
+        datos_extraccion = obtener_metodo_tipo_extraccion(archivo)
+        if not datos_extraccion:
+            print(f"[ADVERTENCIA] No se encontraron datos de extracción para el archivo: {archivo}")
+            datos_extraccion = {
+                "id_fichero": None,
+                "metodo_extraccion": "desconocido",
+                "tipo_extraccion": "desconocido"
+            }
+
+        id_fichero = datos_extraccion["id_fichero"]
+        metodo_extraccion = datos_extraccion["metodo_extraccion"]
+        tipo_extraccion = datos_extraccion["tipo_extraccion"]
 
         for estrategia in ['titulo', 'saltos']:
-            if estrategia == 'titulo': # and any(es_titulo(l) for l in contenido.splitlines()):
+            if estrategia == 'titulo':  # and any(es_titulo(l) for l in contenido.splitlines()):
                 parrafos = segmentar_por_titulo(contenido)
             elif estrategia == 'saltos':
                 parrafos = segmentar_por_saltos(contenido)
@@ -220,7 +229,7 @@ def procesar_archivos():
             inicio_tiempo = time.time()
             resultado = {
                 'archivo_origen': archivo,
-                'estrategia': estrategia,
+                'id_fichero': id_fichero,
                 'parrafos': []
             }
 
@@ -236,7 +245,10 @@ def procesar_archivos():
                     'texto': texto,
                     'longitud': len(texto),
                     'titulos': titulos,
-                    'idioma': idioma
+                    'idioma': idioma,
+                    'estrategia_segmentacion': estrategia,
+                    'metodo_extraccion': metodo_extraccion,
+                    'tipo_extraccion': tipo_extraccion
                 })
                 longitudes.append(len(texto))
 
