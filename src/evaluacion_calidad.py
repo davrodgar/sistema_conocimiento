@@ -24,8 +24,7 @@ DB_PATH = os.path.abspath(
                 os.path.join(os.path.dirname(__file__),
                             "../data/sistema_conocimiento.db"))
 RESULTS_FILE = os.path.abspath(
-                os.path.join(os.path.dirname(__file__),
-                             "../data/resultados_comparaciones.txt"))
+    os.path.join(os.path.dirname(__file__), "../data/resultados_comparaciones.csv"))
 
 def html_to_text(html_content):
     """Convierte contenido HTML a texto plano."""
