@@ -118,7 +118,7 @@ def get_files_from_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     query = """
-    SELECT nombreOriginal, ficheroGenerado, metodoExtraccion, tipoExtraccion
+    SELECT nombreOriginal, ficheroGenerado, metodoExtraccion, tipoExtraccion, tipoOriginal
     FROM Ficheros
     """
     cursor.execute(query)
@@ -127,7 +127,7 @@ def get_files_from_db():
     return files
 
 def log_result(original_file, generated_file, start_time, duration, resultado,
-               original_word_count, extracted_word_count):
+               original_word_count, extracted_word_count, tipo_original):
     """Escribe el resultado de la comparación en un fichero CSV."""
     # Verificar si el archivo CSV existe
     file_exists = os.path.isfile(RESULTS_FILE)
@@ -142,7 +142,7 @@ def log_result(original_file, generated_file, start_time, duration, resultado,
                 "Fecha", "Archivo Original", "Archivo Generado", "Inicio", "Duración (s)",
                 "Similitud (%)", "Texto Perdido (%)", "Artefactos", "Orden Conservado (%)",
                 "Calidad Total (%)", "Palabras Originales", "Palabras Extraídas",
-                "Método de Extracción", "Tipo de Extracción"
+                "Método de Extracción", "Tipo de Extracción", "Tipo Original"
             ])
 
         # Escribir los datos
@@ -150,7 +150,8 @@ def log_result(original_file, generated_file, start_time, duration, resultado,
             datetime.now(), original_file, generated_file, start_time, f"{duration:.2f}",
             resultado['similitud'], resultado['texto_perdido'], resultado['artefactos'],
             resultado['orden_conservado'], resultado['calidad_total'], original_word_count,
-            extracted_word_count, resultado['metodo_extraccion'], resultado['tipo_extraccion']
+            extracted_word_count, resultado['metodo_extraccion'], resultado['tipo_extraccion'],
+            tipo_original
         ])
 
     print(f"✅ Resultados registrados correctamente en {RESULTS_FILE}.")
@@ -217,7 +218,7 @@ def main():
 
     # Agrupar los ficheros por nombreOriginal
     ficheros_por_original = {}
-    for nombre_original, fichero_generado, metodo_extraccion, tipo_extraccion in files:
+    for nombre_original, fichero_generado, metodo_extraccion, tipo_extraccion, tipo_original in files:
         if not fichero_generado.startswith(nombre_original):
             print(f"⚠️ Archivo generado '{fichero_generado}' "
                   f"no corresponde al original '{nombre_original}'.")
@@ -225,7 +226,8 @@ def main():
         ficheros_por_original.setdefault(nombre_original, []).append({
             "fichero_generado": fichero_generado,
             "metodo_extraccion": metodo_extraccion,
-            "tipo_extraccion": tipo_extraccion
+            "tipo_extraccion": tipo_extraccion,
+            "tipo_original": tipo_original
         })
 
     # Procesar cada archivo original
@@ -284,8 +286,10 @@ def main():
             extracted_word_count = (original_word_count
                                     - int(resultado["texto_perdido"] * original_word_count / 100)
                                     + resultado["artefactos"])
-            log_result(original_file, extraccion["fichero_generado"],
-                       start_time, duration, resultado, original_word_count, extracted_word_count)
+            log_result(
+                original_file, extraccion["fichero_generado"], start_time, duration, resultado,
+                original_word_count, extracted_word_count, extraccion["tipo_original"]
+            )
 
     print("✅ Evaluación de calidad completada.")
     # Mostrar resultados de evaluación (opcional, si no se evalúan, no hay resultados)
