@@ -13,6 +13,7 @@ import unicodedata
 from difflib import SequenceMatcher
 from datetime import datetime
 import time
+import csv  # Importar el módulo csv
 from bs4 import BeautifulSoup
 import win32com.client  # Importar pywin32 para interactuar con Microsoft Word
 
@@ -128,20 +129,31 @@ def get_files_from_db():
 
 def log_result(original_file, generated_file, start_time, duration, resultado,
                original_word_count, extracted_word_count):
-    """Escribe el resultado de la comparación en un fichero."""
-    # Escribir los resultados en el archivo
-    with open(RESULTS_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now()} | Original: {original_file} | Generado: {generated_file} | "
-                f"Inicio: {start_time} | Duración: {duration:.2f}s | "
-                f"Similitud: {resultado['similitud']}% | "
-                f"Texto perdido: {resultado['texto_perdido']}% | "
-                f"Artefactos: {resultado['artefactos']} | "
-                f"Orden conservado: {resultado['orden_conservado']}% | "
-                f"Calidad total: {resultado['calidad_total']}% | "
-                f"Palabras originales: {original_word_count} | "
-                f"Palabras extraídas: {extracted_word_count} | "
-                f"Método de extracción: {resultado['metodo_extraccion']} | "
-                f"Tipo de extracción: {resultado['tipo_extraccion']}\n")
+    """Escribe el resultado de la comparación en un fichero CSV."""
+    # Verificar si el archivo CSV existe
+    file_exists = os.path.isfile(RESULTS_FILE)
+
+    # Escribir los resultados en el archivo CSV
+    with open(RESULTS_FILE, "a", newline='', encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # Escribir las cabeceras si el archivo no existe
+        if not file_exists:
+            writer.writerow([
+                "Fecha", "Archivo Original", "Archivo Generado", "Inicio", "Duración (s)",
+                "Similitud (%)", "Texto Perdido (%)", "Artefactos", "Orden Conservado (%)",
+                "Calidad Total (%)", "Palabras Originales", "Palabras Extraídas",
+                "Método de Extracción", "Tipo de Extracción"
+            ])
+
+        # Escribir los datos
+        writer.writerow([
+            datetime.now(), original_file, generated_file, start_time, f"{duration:.2f}",
+            resultado['similitud'], resultado['texto_perdido'], resultado['artefactos'],
+            resultado['orden_conservado'], resultado['calidad_total'], original_word_count,
+            extracted_word_count, resultado['metodo_extraccion'], resultado['tipo_extraccion']
+        ])
+
     print(f"✅ Resultados registrados correctamente en {RESULTS_FILE}.")
 
 def count_words(file_path):
@@ -171,7 +183,8 @@ def calcular_artefactos_normalizados(palabras_extra, original_word_count):
         return 0  # Evitar división por cero
     return (palabras_extra / original_word_count) * 100
 
-def calcular_calidad_total(similitud, texto_perdido, orden_conservado, palabras_extra, original_word_count):
+def calcular_calidad_total(similitud, texto_perdido,
+                           orden_conservado, palabras_extra, original_word_count):
     """
     Calcula un valor único de calidad total basado en los indicadores ponderados.
     
@@ -184,7 +197,6 @@ def calcular_calidad_total(similitud, texto_perdido, orden_conservado, palabras_
     """
     # Normalizar artefactos
     artefactos_normalizados = calcular_artefactos_normalizados(palabras_extra, original_word_count)
-    
     # Calcular calidad total
     calidad_total = (
         (0.40 * similitud) +
@@ -208,7 +220,8 @@ def main():
     ficheros_por_original = {}
     for nombre_original, fichero_generado, metodo_extraccion, tipo_extraccion in files:
         if not fichero_generado.startswith(nombre_original):
-            print(f"⚠️ Archivo generado '{fichero_generado}' no corresponde al original '{nombre_original}'.")
+            print(f"⚠️ Archivo generado '{fichero_generado}' "
+                  f"no corresponde al original '{nombre_original}'.")
             continue
         ficheros_por_original.setdefault(nombre_original, []).append({
             "fichero_generado": fichero_generado,
@@ -227,7 +240,7 @@ def main():
         # Leer el texto del archivo original
         try:
             original_text = read_original_text(original_path)
-            print(f"✅ Texto del archivo original leído correctamente.")
+            print("✅ Texto del archivo original leído correctamente.")
         except Exception as e:
             print(f"❌ Error al leer el archivo original {original_file}: {e}")
             continue
@@ -251,15 +264,16 @@ def main():
             start_timestamp = time.time()
             try:
                 resultado = evaluate_file(original_text, extracted_path, original_word_count,
-                                          is_html=(extraccion["tipo_extraccion"].lower() == "html"))
+                                          is_html=extraccion["tipo_extraccion"].lower() == "html")
                 end_timestamp = time.time()
                 duration = end_timestamp - start_timestamp
                 print(f"✅ Evaluación completada en {duration:.2f} segundos.")
-                
                 # Unificar la impresión de calidad_total aquí
-                print(f"📈 Calidad Total del archivo '{extraccion['fichero_generado']}': {resultado['calidad_total']}%")
+                print(
+                    f"⭐ Calidad Total del archivo: {resultado['calidad_total']}%"                )
             except Exception as e:
-                print(f"❌ Error al evaluar el archivo extraído {extraccion['fichero_generado']}: {e}")
+                print(f"❌ Error al evaluar el archivo extraído {extraccion['fichero_generado']}: "
+                      f"{e}")
                 continue
 
             resultado["documento"] = extraccion["fichero_generado"]
