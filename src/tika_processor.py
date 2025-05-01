@@ -28,7 +28,7 @@ TIKA_JAR_PATH = os.path.join(BASE_DIR, "src/tools", "tika-server-standard-3.1.0.
 # URL del servidor Tika
 TIKA_SERVER = "http://localhost:9998/tika"
 
-ACCEPT_FORMAT = "text/plain"  # Cambia valor según formato ("application/json" o "text/plain")
+ACCEPT_FORMAT = "application/json"  # Cambia valor según formato ("application/json" o "text/plain")
 
 
 # Comando para iniciar el servidor Tika
@@ -99,14 +99,9 @@ def process_document(file_path, accept_format):
                     response = requests.put(TIKA_SERVER, data=f, headers=headers, timeout=10)
                 if response.status_code == 200:
                     # Guardar la respuesta completa de Tika en un archivo RAW
-                    # sanitized_accept_format = sanitize_filename(accept_format)
                     output_raw_file = os.path.join(
                         PROCESSED_DIR,
-                        f"{base_name}_{metodo_extraccion}_Response.raw"
-                    )
-                    output_raw_file = os.path.join(
-                        PROCESSED_DIR,
-                        f"{base_name}_{metodo_extraccion}_Response.raw"
+                        f"{file_name}_{metodo_extraccion}_Response.raw"  # Usar el nombre completo del archivo original
                     )
                     with open(output_raw_file, "w", encoding="utf-8") as f:
                         f.write(response.text)
@@ -120,7 +115,7 @@ def process_document(file_path, accept_format):
                         if content_html.strip():
                             output_html_file = os.path.join(
                                 PROCESSED_DIR,
-                                f"{base_name}_{metodo_extraccion}_Content.html"
+                                f"{file_name}_{metodo_extraccion}_Content.html"  # Usar el nombre completo del archivo original
                             )
                             with open(output_html_file, "w", encoding="utf-8") as f:
                                 f.write(content_html)
@@ -137,7 +132,7 @@ def process_document(file_path, accept_format):
                         # Guardar el contenido como archivo de texto
                         output_txt_file = os.path.join(
                             PROCESSED_DIR,
-                            f"{base_name}_{metodo_extraccion}_Content.txt"
+                            f"{file_name}_{metodo_extraccion}_Content.txt"  # Usar el nombre completo del archivo original
                         )
                         with open(output_txt_file, "w", encoding="utf-8") as f:
                             f.write(response.text)
