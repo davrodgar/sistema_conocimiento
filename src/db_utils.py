@@ -114,11 +114,11 @@ def add_fichero_record(nombre_original, tipo_original, metodo_extraccion,
 
 def obtener_metodo_tipo_extraccion(nombre_archivo):
     """
-    Obtiene los valores de los campos Id, metodoExtraccion y tipoExtraccion de la tabla Ficheros
-    para un archivo específico.
+    Obtiene los valores de los campos Id, metodoExtraccion, tipoExtraccion y tipoOriginal
+    de la tabla Ficheros para un archivo específico.
 
     :param nombre_archivo: Nombre del archivo a buscar en la tabla Ficheros.
-    :return: Diccionario con Id, metodoExtraccion y tipoExtraccion, o None si no se encuentra.
+    :return: Diccionario con Id, metodoExtraccion, tipoExtraccion y tipoOriginal, o None si no se encuentra.
     """
     conn = connect_to_db()
     if not conn:
@@ -126,7 +126,11 @@ def obtener_metodo_tipo_extraccion(nombre_archivo):
 
     cursor = conn.cursor()
     try:
-        query = "SELECT Id, metodoExtraccion, tipoExtraccion FROM Ficheros WHERE ficheroGenerado = ?"
+        query = """
+            SELECT Id, metodoExtraccion, tipoExtraccion, tipoOriginal
+            FROM Ficheros
+            WHERE ficheroGenerado = ?
+        """
         print(f"[INFO] Ejecutando consulta: {query} con parámetro: {nombre_archivo}")
         cursor.execute(query, (nombre_archivo,))
         resultado = cursor.fetchone()
@@ -134,7 +138,8 @@ def obtener_metodo_tipo_extraccion(nombre_archivo):
             return {
                 "id_fichero": resultado[0],
                 "metodo_extraccion": resultado[1],
-                "tipo_extraccion": resultado[2]
+                "tipo_extraccion": resultado[2],
+                "tipo_original": resultado[3]  # Nuevo campo añadido
             }
         return None
     except sqlite3.Error as e:

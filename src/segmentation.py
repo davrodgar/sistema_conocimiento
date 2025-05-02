@@ -62,11 +62,8 @@ def limpiar_html(texto):
 
 def limpiar_texto_presegmentacion(texto):
     """
-    Realiza una limpieza básica del texto antes de segmentarlo:
-    - Elimina múltiples saltos de línea consecutivos (>2) y los reduce a 2 saltos.
-    - Reemplaza saltos de línea simples innecesarios por espacios.
-    - Elimina caracteres especiales redundantes (tabs, múltiples espacios).
-    - Elimina espacios en blanco al inicio y final.
+    Realiza una limpieza básica del texto antes de segmentarlo
+
     """
     # Reemplaza tabulaciones por espacios
     texto = texto.replace("\t", " ")
@@ -189,14 +186,15 @@ def procesar_archivos():
 
     :return: None
     """
+    print("🚀 Iniciando proceso de segmentación de documentos...")  # Nueva traza
     resumen = []
     for archivo in os.listdir(PROCESSED_DIR):
         if not archivo.endswith(('.txt', '.html')):
-            print(f"[ADVERTENCIA] Archivo no soportado: {archivo}")
+            print(f"⚠️ Archivo no soportado: {archivo}")
             continue
 
         ruta = os.path.join(PROCESSED_DIR, archivo)
-        print(f"[INFO] Procesando archivo: {archivo}")
+        print(f"ℹ️ Procesando archivo: {archivo}")
 
         with open(ruta, 'r', encoding='utf-8') as f:
             contenido = f.read()
@@ -204,21 +202,24 @@ def procesar_archivos():
         if archivo.endswith('.html'):
             contenido = limpiar_html(contenido)
 
-        # Obtener el método, tipo de extracción y ID desde la base de datos
+        # Obtener el método, tipo de extracción, tipo original y ID desde la base de datos
         datos_extraccion = obtener_metodo_tipo_extraccion(archivo)
         if not datos_extraccion:
-            print(f"[ADVERTENCIA] No se encontraron datos de extracción para el archivo: {archivo}")
+            print(f"⚠️ No se encontraron datos de extracción para el archivo: {archivo}")
             datos_extraccion = {
                 "id_fichero": None,
                 "metodo_extraccion": "desconocido",
-                "tipo_extraccion": "desconocido"
+                "tipo_extraccion": "desconocido",
+                "tipo_original": "desconocido"
             }
 
         id_fichero = datos_extraccion["id_fichero"]
         metodo_extraccion = datos_extraccion["metodo_extraccion"]
         tipo_extraccion = datos_extraccion["tipo_extraccion"]
+        tipo_original = datos_extraccion["tipo_original"]
 
         for estrategia in ['titulo', 'saltos']:
+            print(f"ℹ️  Aplicando estrategia de segmentación: {estrategia}")
             if estrategia == 'titulo':  # and any(es_titulo(l) for l in contenido.splitlines()):
                 parrafos = segmentar_por_titulo(contenido)
             elif estrategia == 'saltos':
@@ -230,6 +231,7 @@ def procesar_archivos():
             resultado = {
                 'archivo_origen': archivo,
                 'id_fichero': id_fichero,
+                'tipo_original': tipo_original,  # Nuevo campo añadido
                 'parrafos': []
             }
 
@@ -239,7 +241,7 @@ def procesar_archivos():
                 idioma = detectar_idioma(texto)
                 titulos = extraer_titulos(texto)
                 if titulos:
-                    print(f"[INFO] Títulos detectados en párrafo {idx}: {titulos}")
+                    print(f"✅  Títulos detectados en párrafo {idx}: {titulos}")
                 resultado['parrafos'].append({
                     'id_parrafo': idx,
                     'texto': texto,
@@ -260,7 +262,7 @@ def procesar_archivos():
             with open(json_path, 'w', encoding='utf-8') as jf:
                 json.dump(resultado, jf, ensure_ascii=False, indent=2)
 
-            resumen.append({
+    resumen.append({
                 'archivo': f"{base_nombre}_{estrategia}",
                 'estrategia': estrategia,
                 'total_parrafos': len(parrafos),
@@ -272,14 +274,20 @@ def procesar_archivos():
             })
 
     resumen_path = os.path.join(SEGMENTED_DIR, 'resumen_segmentacion.csv')
+
+    # Verificar si el archivo ya existe
     if os.path.exists(resumen_path):
+        # Leer el archivo existente
         df_existente = pd.read_csv(resumen_path)
+        # Concatenar los nuevos registros con los existentes
         df_resumen = pd.concat([df_existente, pd.DataFrame(resumen)], ignore_index=True)
     else:
+        # Crear un nuevo DataFrame con las cabeceras y los nuevos registros
         df_resumen = pd.DataFrame(resumen)
 
+    # Guardar el DataFrame actualizado en el archivo CSV
     df_resumen.to_csv(resumen_path, index=False, float_format="%.2f")
-    print("[INFO] Procesamiento completo.")
+    print("✅ Procesamiento completo.")
 
 if __name__ == '__main__':
     procesar_archivos()
