@@ -186,15 +186,18 @@ def procesar_archivos():
 
     :return: None
     """
-    print("🚀 Iniciando proceso de segmentación de documentos...")  # Nueva traza
+    # print("🚀 Iniciando proceso de segmentación de documentos...")
+    print(" Iniciando proceso de segmentación de documentos...")
     resumen = []
     for archivo in os.listdir(PROCESSED_DIR):
         if not archivo.endswith(('.txt', '.html')):
-            print(f"⚠️ Archivo no soportado: {archivo}")
+            # print(f"⚠️ Archivo no soportado: {archivo}")
+            print(f" Archivo no soportado: {archivo}")
             continue
 
         ruta = os.path.join(PROCESSED_DIR, archivo)
-        print(f"ℹ️ Procesando archivo: {archivo}")
+        # print(f"ℹ️ Procesando archivo: {archivo}")
+        print(f" Procesando archivo: {archivo}")
 
         with open(ruta, 'r', encoding='utf-8') as f:
             contenido = f.read()
@@ -205,7 +208,8 @@ def procesar_archivos():
         # Obtener el método, tipo de extracción, tipo original y ID desde la base de datos
         datos_extraccion = obtener_metodo_tipo_extraccion(archivo)
         if not datos_extraccion:
-            print(f"⚠️ No se encontraron datos de extracción para el archivo: {archivo}")
+            # print(f"⚠️ No se encontraron datos de extracción para el archivo: {archivo}")
+            print(f" No se encontraron datos de extracción para el archivo: {archivo}")
             datos_extraccion = {
                 "id_fichero": None,
                 "metodo_extraccion": "desconocido",
@@ -217,9 +221,11 @@ def procesar_archivos():
         metodo_extraccion = datos_extraccion["metodo_extraccion"]
         tipo_extraccion = datos_extraccion["tipo_extraccion"]
         tipo_original = datos_extraccion["tipo_original"]
+        nombre_original = datos_extraccion["nombre_original"]
 
         for estrategia in ['titulo', 'saltos']:
-            print(f"ℹ️  Aplicando estrategia de segmentación: {estrategia}")
+            # print(f"ℹ️  Aplicando estrategia de segmentación: {estrategia}")
+            print(f" Aplicando estrategia de segmentación: {estrategia}")
             if estrategia == 'titulo':  # and any(es_titulo(l) for l in contenido.splitlines()):
                 parrafos = segmentar_por_titulo(contenido)
             elif estrategia == 'saltos':
@@ -229,9 +235,10 @@ def procesar_archivos():
 
             inicio_tiempo = time.time()
             resultado = {
-                'archivo_origen': archivo,
+                'archivo_procesado': archivo,
                 'id_fichero': id_fichero,
-                'tipo_original': tipo_original,  # Nuevo campo añadido
+                'tipo_original': tipo_original,
+                'nombre_original': nombre_original,
                 'parrafos': []
             }
 
@@ -241,7 +248,8 @@ def procesar_archivos():
                 idioma = detectar_idioma(texto)
                 titulos = extraer_titulos(texto)
                 if titulos:
-                    print(f"✅  Títulos detectados en párrafo {idx}: {titulos}")
+                    # print(f"✅  Títulos detectados en párrafo {idx}: {titulos}")
+                    print(f" Títulos detectados en párrafo {idx}: {titulos}")
                 resultado['parrafos'].append({
                     'id_parrafo': idx,
                     'texto': texto,
@@ -250,7 +258,8 @@ def procesar_archivos():
                     'idioma': idioma,
                     'estrategia_segmentacion': estrategia,
                     'metodo_extraccion': metodo_extraccion,
-                    'tipo_extraccion': tipo_extraccion
+                    'tipo_extraccion': tipo_extraccion,
+                    'archivo_procesado': archivo
                 })
                 longitudes.append(len(texto))
 
@@ -262,7 +271,7 @@ def procesar_archivos():
             with open(json_path, 'w', encoding='utf-8') as jf:
                 json.dump(resultado, jf, ensure_ascii=False, indent=2)
 
-    resumen.append({
+            resumen.append({
                 'archivo': f"{base_nombre}_{estrategia}",
                 'estrategia': estrategia,
                 'total_parrafos': len(parrafos),
@@ -270,7 +279,12 @@ def procesar_archivos():
                 'longitud_minima': min(longitudes) if longitudes else 0,
                 'longitud_maxima': max(longitudes) if longitudes else 0,
                 'tiempo_procesado_segundos': round(tiempo_procesado, 2),
-                'fecha_hora_ejecucion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'fecha_hora_ejecucion': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'id_fichero': id_fichero,
+                'tipo_original': tipo_original,
+                'nombre_original': nombre_original,
+                'metodo_extraccion': metodo_extraccion,
+                'tipo_extraccion': tipo_extraccion
             })
 
     resumen_path = os.path.join(SEGMENTED_DIR, 'resumen_segmentacion.csv')
@@ -287,7 +301,8 @@ def procesar_archivos():
 
     # Guardar el DataFrame actualizado en el archivo CSV
     df_resumen.to_csv(resumen_path, index=False, float_format="%.2f")
-    print("✅ Procesamiento completo.")
+    # print("✅ Procesamiento completo.")
+    print(" Procesamiento completo.")
 
 if __name__ == '__main__':
     procesar_archivos()
