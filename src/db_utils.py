@@ -114,11 +114,13 @@ def add_fichero_record(nombre_original, tipo_original, metodo_extraccion,
 
 def obtener_metodo_tipo_extraccion(nombre_archivo):
     """
-    Obtiene los valores de los campos Id, metodoExtraccion, tipoExtraccion, tipoOriginal y nombreOriginal
+    Obtiene los valores de los campos Id, metodoExtraccion, tipoExtraccion, tipoOriginal
+    y nombreOriginal
     de la tabla Ficheros para un archivo específico.
 
     :param nombre_archivo: Nombre del archivo a buscar en la tabla Ficheros.
-    :return: Diccionario con Id, metodoExtraccion, tipoExtraccion, tipoOriginal y nombreOriginal, o None si no se encuentra.
+    :return: Diccionario con Id, metodoExtraccion, tipoExtraccion, tipoOriginal
+    y nombreOriginal, o None si no se encuentra.
     """
     conn = connect_to_db()
     if not conn:
