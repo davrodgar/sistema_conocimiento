@@ -19,6 +19,9 @@ from datetime import datetime
 import pandas as pd
 from bs4 import BeautifulSoup
 from langdetect import detect, DetectorFactory, LangDetectException
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import nltk
 from db_utils import obtener_metodo_tipo_extraccion
 
 # Configuración inicial
@@ -39,6 +42,13 @@ ROMAN_VALID = re.compile(
     r"^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$",
     re.IGNORECASE
 )
+
+# Descargar recursos necesarios de NLTK
+nltk.download('stopwords')
+nltk.download('punkt')
+
+# Lista de stopwords en español
+STOPWORDS = set(stopwords.words('spanish'))
 
 # Función para limpiar HTML
 def limpiar_html(texto):
@@ -62,8 +72,8 @@ def limpiar_html(texto):
 
 def limpiar_texto_presegmentacion(texto):
     """
-    Realiza una limpieza básica del texto antes de segmentarlo
-
+    Realiza una limpieza básica del texto antes de segmentarlo.
+    Excluye el paso a minúsculas para no afectar la segmentación basada en títulos.
     """
     # Reemplaza tabulaciones por espacios
     texto = texto.replace("\t", " ")
@@ -77,10 +87,28 @@ def limpiar_texto_presegmentacion(texto):
     # Reemplaza saltos de línea simples que no separan párrafos por espacio
     texto = re.sub(r"(?<!\n)\n(?!\n)", " ", texto)
 
+    # Elimina caracteres especiales no deseados
+    texto = re.sub(r"[^\w\sÁÉÍÓÚÜÑáéíóúüñ.,;:!?()\"'-]", "", texto)
+
     # Elimina espacios al principio y final
     texto = texto.strip()
 
     return texto
+
+def limpiar_texto_postsegmentacion(texto):
+    """
+    Realiza una limpieza avanzada del texto después de la segmentación.
+    Incluye el paso a minúsculas y la eliminación de stopwords.
+    """
+    # Convertir a minúsculas
+    texto = texto.lower()
+
+    # Tokenizar y eliminar stopwords
+    palabras = word_tokenize(texto)
+    palabras_limpias = [palabra for palabra in palabras if palabra not in STOPWORDS]
+
+    # Reconstruir el texto limpio
+    return " ".join(palabras_limpias).strip()
 
 # Estrategia 1: Segmentación por saltos de línea
 def segmentar_por_saltos(texto):
@@ -100,18 +128,22 @@ def segmentar_por_saltos(texto):
 # Estrategia 2: Segmentación por títulos
 def es_titulo(linea):
     """
-        Determina si una línea de texto cumple con los criterios para ser considerada un título.
+    Determina si una línea de texto cumple con los criterios para ser considerada un título.
 
-        Los criterios incluyen:
-        - Formato numérico (por ejemplo, "1. Introducción").
-        - Formato de letra (por ejemplo, "A. Resumen").
-        - Formato de número romano (por ejemplo, "I. Antecedentes").
-        - Texto en mayúsculas.
-
-        :param linea: Cadena de texto a evaluar.
-        :return: True si la línea es un título, False en caso contrario.
+    Los criterios incluyen:
+    - Formato numérico (por ejemplo, "1. Introducción").
+    - Formato de letra (por ejemplo, "A. Resumen").
+    - Formato de número romano (por ejemplo, "I. Antecedentes").
+    - Texto en mayúsculas.
+    - Longitud mínima para evitar títulos irrelevantes.
     """
     linea = linea.strip()
+    
+    # Filtrar títulos por longitud mínima
+    if len(linea) < 5:  # Ajusta el valor según sea necesario
+        return False
+
+    # Verificar si coincide con los patrones de títulos
     if TITULO_NUMERICO.match(linea):
         return True
     if TITULO_LETRA.match(linea):
@@ -123,6 +155,7 @@ def es_titulo(linea):
             return True
     if TITULO_MAYUSCULAS.match(linea):
         return True
+
     return False
 
 def segmentar_por_titulo(texto):
