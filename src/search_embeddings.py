@@ -36,10 +36,21 @@ def calcular_similitud(embedding1, embedding2):
     """Calcula la similitud mediante la distancia del coseno."""
     return cosine(embedding1, embedding2)
 
-def buscar_documentos_similares(texto, ruta_carpeta_embeddings):
+def buscar_documentos_similares(texto, ruta_carpeta_embeddings, filtros=None):
     """
-    Busca documentos en una carpeta que sean más similares al texto de entrada.
+    Busca documentos en una carpeta que sean más similares al texto de entrada,
+    aplicando filtros opcionales para limitar los segmentos considerados.
+    
     Retorna una lista con el nombre del archivo, la menor distancia y el párrafo más similar.
+    
+    :param texto: Texto de entrada para buscar similitudes.
+    :param ruta_carpeta_embeddings: Ruta a la carpeta que contiene los archivos JSON con embeddings.
+    :param filtros: Diccionario con los filtros a aplicar. Las claves pueden ser:
+        - metodo_extraccion
+        - tipo_extraccion
+        - estrategia_segmentacion
+        - idioma
+        - modelo_embedding
     """
     embedding_texto = embedding_model.encode(texto)
     resultados = {}
@@ -56,6 +67,26 @@ def buscar_documentos_similares(texto, ruta_carpeta_embeddings):
             parrafo_mas_similar = ""
 
             for seccion in parrafos:
+                # Aplicar filtros
+                if filtros:
+                    if (filtros.get("metodo_extraccion") and
+                        seccion.get("metodo_extraccion") != filtros["metodo_extraccion"]):
+                        continue
+                    if (filtros.get("tipo_extraccion") and
+                        seccion.get("tipo_extraccion") != filtros["tipo_extraccion"]):
+                        continue
+                    if (filtros.get("estrategia_segmentacion") and
+                        seccion.get("estrategia_segmentacion") !=
+                                                    filtros["estrategia_segmentacion"]):
+                        continue
+                    if (filtros.get("idioma") and
+                        seccion.get("idioma") != filtros["idioma"]):
+                        continue
+                    if (filtros.get("modelo_embedding") and
+                        seccion.get("modelo_embedding") != filtros["modelo_embedding"]):
+                        continue
+
+                # Calcular la distancia del coseno
                 embedding_parrafo = np.array(seccion["embedding"])
                 distancia = calcular_similitud(embedding_texto, embedding_parrafo)
 
@@ -63,46 +94,52 @@ def buscar_documentos_similares(texto, ruta_carpeta_embeddings):
                     menor_distancia = distancia
                     parrafo_mas_similar = seccion["texto"]
 
-            print(f"✅ Archivo procesado: {archivo}, menor distancia: {menor_distancia:.4f}")
-            resultados[nombre_archivo] = (menor_distancia, parrafo_mas_similar)
+            if menor_distancia < float("inf"):
+                print(f"✅ Archivo procesado: {archivo}, menor distancia: {menor_distancia:.4f}")
+                resultados[nombre_archivo] = (menor_distancia, parrafo_mas_similar)
 
     resultados_ordenados = sorted(resultados.items(), key=lambda x: x[1][0])
 
     umbral_actual = UMBRAL_BASE
-    documentos_relevantes = [
+    documentos_filtrados = [
         (archivo, distancia, parrafo)
         for archivo, (distancia, parrafo)
-        in resultados_ordenados if distancia <= umbral_actual]
+        in resultados_ordenados if distancia <= umbral_actual
+    ]
 
-    if len(documentos_relevantes) < MIN_DOCUMENTOS_RELEVANTES:
+    # Si no se encuentran documentos con el primer umbral, intentar con el segundo
+    if len(documentos_filtrados) < MIN_DOCUMENTOS_RELEVANTES:
+        print(f"⚠️ No se encontraron documentos relevantes con el umbral base ({UMBRAL_BASE}). Intentando con el umbral máximo ({UMBRAL_MAXIMO}).")
         umbral_actual = UMBRAL_MAXIMO
-        documentos_relevantes = [
+        documentos_filtrados = [
             (archivo, distancia, parrafo)
             for archivo, (distancia, parrafo)
-            in resultados_ordenados if distancia <= umbral_actual]
+            in resultados_ordenados if distancia <= umbral_actual
+        ]
 
-    if len(documentos_relevantes) < MIN_DOCUMENTOS_RELEVANTES:
+    # Si aún no se encuentran documentos, mostrar mensaje final
+    if len(documentos_filtrados) < MIN_DOCUMENTOS_RELEVANTES:
         print("⚠️ No se encontraron documentos relevantes con los umbrales establecidos.")
         return []
 
-    print(f"📋 Documentos relevantes encontrados: {len(documentos_relevantes)}")
-    return documentos_relevantes
+    print(f"📋 Documentos relevantes encontrados: {len(documentos_filtrados)}")
+    return documentos_filtrados
 
 def generar_respuesta_con_ollama(texto_pregunta, ruta_carpeta_embeddings, modelo_ollama="mistral"):
     """
     Genera una respuesta en lenguaje natural a partir de los párrafos más similares,
     utilizando Ollama como modelo generativo e incluyendo referencias a los documentos originales.
     """
-    documentos_relevantes = buscar_documentos_similares(texto_pregunta, ruta_carpeta_embeddings)
+    documentos_encontrados = buscar_documentos_similares(texto_pregunta, ruta_carpeta_embeddings)
 
-    if not documentos_relevantes:
+    if not documentos_encontrados:
         return "No se encontró una respuesta clara en los documentos."
 
     # Construir el prompt para Ollama
     contexto = "A continuación, se presentan extractos de documentos relevantes:\n\n"
     referencias = []
 
-    for archivo, distancia, parrafo in documentos_relevantes[:3]:
+    for archivo, distancia, parrafo in documentos_encontrados[:3]:
         # Tomar hasta 3 párrafos relevantes
         contexto += f"- {parrafo}\n\n"
         referencias.append(f"{archivo} (distancia: {distancia:.4f})\nPárrafo: {parrafo}")
@@ -127,7 +164,25 @@ def generar_respuesta_con_ollama(texto_pregunta, ruta_carpeta_embeddings, modelo
 if __name__ == "__main__":
     # Ejemplo de uso
     carpeta_embeddings = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data"))
+    # Verificar si la carpeta existe
+    if not os.path.exists(carpeta_embeddings):
+        raise FileNotFoundError(f"La carpeta de embeddings no existe: {carpeta_embeddings}")
+
     TEXTO_PREGUNTA = "¿Qué preserva El sistema de gestión de la seguridad de la información?"
+
+    filtros_consulta = {
+        "metodo_extraccion": "PDFPlumber",
+        "tipo_extraccion": ".txt",
+        "estrategia_segmentacion": "titulo",
+        "idioma": "es",
+        "modelo_embedding": "paraphrase-multilingual-MiniLM-L12-v2"
+    }
+
+    documentos_relevantes = buscar_documentos_similares(
+        texto="¿Qué preserva El sistema de gestión de la seguridad de la información?",
+        ruta_carpeta_embeddings=carpeta_embeddings,  # Usar la variable correctamente
+        filtros=filtros_consulta
+    )
 
     RESPUESTA = generar_respuesta_con_ollama(
         TEXTO_PREGUNTA, carpeta_embeddings, modelo_ollama="mistral")
