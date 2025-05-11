@@ -102,6 +102,7 @@ def buscar_documentos_similares(
                     parrafo.get("nombreOriginal", parrafo.get("archivo_origen", "Desconocido")),
                     distancia,
                     {
+                        "id_fichero": parrafo.get("id_fichero"),
                         "id_parrafo": parrafo.get("id_parrafo", "Sin ID"),
                         "texto": parrafo.get("texto", "Texto no disponible")
                     }
@@ -160,6 +161,37 @@ def generar_respuesta_con_ollama(parrafos_considerados, texto_pregunta, modelo_o
 
     # Incluir referencias únicas y párrafos en la salida
     respuesta_final = f"{respuesta_generada}\n\n📌 Ref. utilizadas:\n" + "\n\n".join(referencias)
+
+    # --- Registro de la consulta y los fragmentos utilizados en la base de datos ---
+    from db_utils import registrar_consulta, registrar_fragmentos_consulta
+
+    # Registra la consulta en la tabla Consultas y obtiene el id insertado
+    id_consulta = registrar_consulta(
+        texto_pregunta,      # Texto de la consulta realizada
+        modelo_ollama,        # Nombre del modelo de embedding utilizado
+        "mistral",     # Nombre del modelo LLM utilizado (fijo: 'mistral')
+        respuesta_generada  # Respuesta generada por el sistema
+    )
+
+    # Prepara la lista de fragmentos en el formato esperado por registrar_fragmentos_consulta
+    fragmentos_para_registro = [
+        {
+            "id_fichero": parrafo["id_fichero"],
+            "id_parrafo": parrafo["id_parrafo"],
+            "distancia": distancia
+        }
+        for _, distancia, parrafo in parrafos_considerados
+    ]
+
+    # Si la consulta se registró correctamente, registra los fragmentos utilizados
+    if id_consulta:
+        registrar_fragmentos_consulta(
+            id_consulta,
+            fragmentos_para_registro  # Lista de fragmentos: cada uno con 'id_parrafo' y 'distancia'
+        )
+        print(f"[INFO] Consulta y fragmentos registrados en la base de datos (id_consulta={id_consulta})")
+    else:
+        print("❌ No se pudo registrar la consulta en la base de datos.")
 
     return respuesta_final
 

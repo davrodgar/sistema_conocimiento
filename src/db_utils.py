@@ -254,7 +254,7 @@ def obtener_parrafos_para_consulta(
     cursor = conn.cursor()
     try:
         query = """
-            SELECT P.texto, P.embedding, F.nombreOriginal, P.id_parrafo
+            SELECT P.texto, P.embedding, F.nombreOriginal, P.id_parrafo, P.id_fichero
             FROM Parrafos P
             JOIN Ficheros F ON P.id_fichero = F.Id
             WHERE 1=1 and F.Id in (60,61)
@@ -285,12 +285,64 @@ def obtener_parrafos_para_consulta(
                 "texto": row[0],
                 "embedding": row[1],
                 "nombreOriginal": row[2],
-                "id_parrafo": row[3]
+                "id_parrafo": row[3],
+                "id_fichero": row[4]
             }
             for row in rows
         ]
     except Exception as e:
         print(f"❌ Error al obtener párrafos para consulta: {e}")
         return []
+    finally:
+        conn.close()
+
+def registrar_consulta(pregunta, modelo_embedding, modelo_llm, respuesta):
+    """
+    Inserta una nueva consulta en la tabla Consultas y devuelve el id insertado.
+    :param pregunta: Texto de la pregunta realizada.
+    :param modelo_embedding: Nombre del modelo de embedding utilizado.
+    :param modelo_llm: Nombre del modelo LLM utilizado.
+    :param respuesta: Respuesta generada por el sistema.
+    :return: id de la consulta insertada (lastrowid) o None si hay error.
+    """
+    conn = connect_to_db()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO Consultas (pregunta, modelo_embedding, modelo_llm, respuesta_generada)
+            VALUES (?, ?, ?, ?)
+        """, (pregunta, modelo_embedding, modelo_llm, respuesta))
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        print(f"❌ Error al registrar la consulta: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def registrar_fragmentos_consulta(id_consulta, lista_fragmentos):
+    """
+    Inserta los fragmentos utilizados en una consulta en la tabla Consultas_Parrafos.
+    :param id_consulta: ID de la consulta (foreign key con Consultas.id).
+    :param lista_fragmentos: Lista de diccionarios con claves 'id_fichero', 'id_parrafo' y 'distancia'.
+    """
+    if not lista_fragmentos:
+        return
+    conn = connect_to_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        for frag in lista_fragmentos:
+            cursor.execute("""
+                INSERT INTO Consultas_Parrafos (id_consulta, id_fichero, id_parrafo, distancia)
+                VALUES (?, ?, ?, ?)
+            """, (id_consulta, frag['id_fichero'], frag['id_parrafo'], frag['distancia']))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"❌ Error al registrar los fragmentos de la consulta: {e}")
     finally:
         conn.close()
