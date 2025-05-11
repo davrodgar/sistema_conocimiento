@@ -7,7 +7,6 @@ Funcionalidad principal:
 
 Utiliza modelos configurables de Sentence Transformers.
 """
-import os
 import json
 import time
 from tqdm import tqdm
