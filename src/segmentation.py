@@ -22,7 +22,7 @@ from langdetect import detect, DetectorFactory, LangDetectException
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import nltk
-from db_utils import obtener_metodo_tipo_extraccion
+from db_utils import obtener_metodo_tipo_extraccion, insertar_parrafo_segmentado
 
 # Configuración inicial
 DetectorFactory.seed = 0
@@ -214,9 +214,7 @@ def procesar_archivos():
     Procesa los archivos en el directorio de entrada y realiza la segmentación en párrafos.
 
     Genera archivos JSON con los párrafos segmentados y un resumen en formato CSV con estadísticas
-    del procesamiento.
-
-    :return: None
+    del procesamiento. Además, inserta cada párrafo segmentado en la base de datos.
     """
     print("🚀 Iniciando proceso de segmentación de documentos...")
     resumen = []
@@ -242,7 +240,8 @@ def procesar_archivos():
                 "id_fichero": None,
                 "metodo_extraccion": "desconocido",
                 "tipo_extraccion": "desconocido",
-                "tipo_original": "desconocido"
+                "tipo_original": "desconocido",
+                "nombre_original": archivo
             }
 
         id_fichero = datos_extraccion["id_fichero"]
@@ -293,6 +292,20 @@ def procesar_archivos():
                     'archivo_procesado': archivo
                 })
                 longitudes.append(len(texto_limpio))
+
+                # --- INSERCIÓN EN BASE DE DATOS ---
+                insertar_parrafo_segmentado(
+                    id_fichero=id_fichero,
+                    id_parrafo=idx,
+                    texto=texto_limpio,
+                    longitud=len(texto_limpio),
+                    idioma=idioma,
+                    titulos=titulos,
+                    estrategia=estrategia,
+                    metodo=metodo_extraccion,
+                    tipo_extraccion=tipo_extraccion
+                )
+                # --- FIN INSERCIÓN EN BASE DE DATOS ---
 
             fin_tiempo = time.time()
             tiempo_procesado = fin_tiempo - inicio_tiempo
