@@ -13,7 +13,7 @@ El módulo utiliza bibliotecas como BeautifulSoup y LangDetect para el procesami
 """
 import os
 import re
-import json
+# import json
 import time
 from datetime import datetime
 import pandas as pd
@@ -232,6 +232,9 @@ def procesar_archivos():
         if archivo.endswith('.html'):
             contenido = limpiar_html(contenido)
 
+        # Aplicar limpieza básica antes de segmentar
+        # contenido = limpiar_texto_presegmentacion(contenido)
+
         # Obtener el método, tipo de extracción, tipo original y ID desde la base de datos
         datos_extraccion = obtener_metodo_tipo_extraccion(archivo)
         if not datos_extraccion:
@@ -311,11 +314,12 @@ def procesar_archivos():
             tiempo_procesado = fin_tiempo - inicio_tiempo
 
             base_nombre = os.path.splitext(archivo)[0]
-            json_path = os.path.join(SEGMENTED_DIR, f"{base_nombre}_{estrategia}.json")
-            with open(json_path, 'w', encoding='utf-8') as jf:
-                json.dump(resultado, jf, ensure_ascii=False, indent=2)
+            # Eliminar o comentar la generación del fichero JSON
+            # json_path = os.path.join(SEGMENTED_DIR, f"{base_nombre}_{estrategia}.json")
+            # with open(json_path, 'w', encoding='utf-8') as jf:
+            #     json.dump(resultado, jf, ensure_ascii=False, indent=2)
 
-            print(f"✅ Archivo segmentado y guardado: {json_path}")
+            # print(f"✅ Archivo segmentado y guardado: {json_path}")
 
             resumen.append({
                 'archivo': f"{base_nombre}_{estrategia}",
