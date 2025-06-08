@@ -257,7 +257,7 @@ def obtener_parrafos_para_consulta(
             SELECT P.texto, P.embedding, F.nombreOriginal, P.id_parrafo, P.id_fichero
             FROM Parrafos P
             JOIN Ficheros F ON P.id_fichero = F.Id
-            WHERE 1=1 and F.Id in (60,61)
+            WHERE 1=1 and F.Id in (59,113,125)
         """
         params = []
         if modelo_embedding:
@@ -296,14 +296,22 @@ def obtener_parrafos_para_consulta(
     finally:
         conn.close()
 
-def registrar_consulta(pregunta, modelo_embedding, modelo_llm, respuesta):
+def registrar_consulta(
+    pregunta,
+    modelo_embedding,
+    modelo_llm,
+    respuesta,
+    umbral_base,
+    top_k,
+    num_parrafos_considerados,
+    tiempo_top_k,
+    tiempo_llm,
+    filtros_fichero_param=None,
+    filtros_parrafo_param=None
+):
     """
     Inserta una nueva consulta en la tabla Consultas y devuelve el id insertado.
-    :param pregunta: Texto de la pregunta realizada.
-    :param modelo_embedding: Nombre del modelo de embedding utilizado.
-    :param modelo_llm: Nombre del modelo LLM utilizado.
-    :param respuesta: Respuesta generada por el sistema.
-    :return: id de la consulta insertada (lastrowid) o None si hay error.
+    Ahora guarda también los filtros usados (como JSON).
     """
     conn = connect_to_db()
     if not conn:
@@ -311,12 +319,21 @@ def registrar_consulta(pregunta, modelo_embedding, modelo_llm, respuesta):
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO Consultas (pregunta, modelo_embedding, modelo_llm, respuesta_generada)
-            VALUES (?, ?, ?, ?)
-        """, (pregunta, modelo_embedding, modelo_llm, respuesta))
+            INSERT INTO Consultas (
+                pregunta, modelo_embedding, modelo_llm, respuesta_generada,
+                umbral_base, top_k, num_parrafos_considerados, tiempo_top_k, tiempo_llm,
+                filtros_fichero_param, filtros_parrafo_param
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            pregunta, modelo_embedding, modelo_llm, respuesta,
+            umbral_base, top_k, num_parrafos_considerados, tiempo_top_k, tiempo_llm,
+            json.dumps(filtros_fichero_param) if filtros_fichero_param else None,
+            json.dumps(filtros_parrafo_param) if filtros_parrafo_param else None
+        ))
         conn.commit()
         return cursor.lastrowid
-    except sqlite3.Error as e:
+    except Exception as e:
         print(f"❌ Error al registrar la consulta: {e}")
         return None
     finally:
@@ -327,7 +344,8 @@ def registrar_fragmentos_consulta(id_consulta, lista_fragmentos):
     """
     Inserta los fragmentos utilizados en una consulta en la tabla Consultas_Parrafos.
     :param id_consulta: ID de la consulta (foreign key con Consultas.id).
-    :param lista_fragmentos: Lista de diccionarios con claves 'id_fichero', 'id_parrafo' y 'distancia'.
+    :param lista_fragmentos: Lista de diccionarios con claves 'id_fichero',
+                                    'id_parrafo' y 'distancia'.
     """
     if not lista_fragmentos:
         return
@@ -346,3 +364,12 @@ def registrar_fragmentos_consulta(id_consulta, lista_fragmentos):
         print(f"❌ Error al registrar los fragmentos de la consulta: {e}")
     finally:
         conn.close()
+
+def conectar_db():
+    """
+    Establece una conexión con la base de datos SQLite y muestra la ruta utilizada.
+    :return: Objeto de conexión a la base de datos.
+    """
+    ruta_db = r"c:\Users\arodri\Proyectos\TFM_2025\sistema_conocimiento\data\sistema_conocimiento.db"
+    print(f"[INFO] Ruta a la base de datos SQLite: {ruta_db}")
+    return sqlite3.connect(ruta_db)
